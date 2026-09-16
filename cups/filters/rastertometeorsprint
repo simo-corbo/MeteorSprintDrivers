@@ -1,0 +1,103 @@
+#!/Users/simonecorbo/Repo/DriverTermici/.venv/bin/python3
+# NOTE: this shebang points at this dev machine's project venv (which has
+# pyusb/Pillow/pymupdf installed via `pip install -e .`), not a portable
+# path -- CUPS filters run outside any shell/venv activation, so they
+# need an absolute interpreter path with the right packages already
+# importable. Packaging this properly (so an end user doesn't need this
+# exact path or a manually-created venv) is Phase 8 (installer) work;
+# this is deliberately a dev/validation shortcut, not the final design.
+"""CUPS filter: PDF -> Meteor Sprint raster protocol bytes.
+
+The PPD (cups/ppd/meteorsprint.ppd) declares this filter as accepting
+`application/pdf` directly -- by the time a job reaches here, CUPS/macOS
+has already normalized whatever the application submitted (PostScript,
+etc.) into PDF, so this filter only has to deal with one input format.
+
+Standard CUPS filter calling convention:
+
+    filter job-id user title copies options [filename]
+
+If `filename` is omitted, the document is read from stdin. Output (the
+final Meteor Sprint protocol byte stream -- see docs/protocol.md and
+docs/test-log.md) is written to stdout, where CUPS hands it to the
+backend (cups/backend/meteorsprint) for transmission to the device.
+
+Rendering: each PDF page is rasterized at 203 DPI (the DPI implied by
+the printer's confirmed 576-dot/72-byte raster width over ~72mm --
+docs/usb-analysis.md), then run through the already-validated
+meteor_sprint.renderer pipeline (resize to exact raster width, dither,
+pack) before being wrapped in a GS v 0 command. A blank line is written
+before each raster command so no pending text is discarded (confirmed
+necessary in docs/test-log.md Tests 10-12), and the job ends with a cut.
+"""
+from __future__ import annotations
+
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 "..", "..", "src"))
+
+DPI = 203  # matches the printer's confirmed raster dot density
+
+
+def eprint(*args) -> None:
+    print(*args, file=sys.stderr, flush=True)
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) < 6:
+        eprint(f"ERROR: rastertometeorsprint: wrong number of arguments "
+               f"({len(argv)}), expected job-id user title copies options "
+               f"[filename]")
+        return 1
+
+    filename = argv[6] if len(argv) > 6 else None
+
+    try:
+        import pymupdf
+        from PIL import Image
+
+        from meteor_sprint import protocol
+        from meteor_sprint.renderer import render_image_to_raster
+    except ImportError as exc:
+        eprint(f"ERROR: rastertometeorsprint: missing dependency: {exc!r}")
+        return 1
+
+    if filename:
+        with open(filename, "rb") as f:
+            pdf_bytes = f.read()
+    else:
+        pdf_bytes = sys.stdin.buffer.read()
+
+    try:
+        doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
+    except Exception as exc:  # noqa: BLE001
+        eprint(f"ERROR: rastertometeorsprint: could not open PDF: {exc!r}")
+        return 1
+
+    out = sys.stdout.buffer
+    zoom = pymupdf.Matrix(DPI / 72.0, DPI / 72.0)
+
+    try:
+        for page in doc:
+            pix = page.get_pixmap(matrix=zoom, colorspace=pymupdf.csGRAY)
+            image = Image.frombytes("L", (pix.width, pix.height), pix.samples)
+
+            data, width_bytes, height_dots = render_image_to_raster(image)
+            out.write(b"\n")  # flush any pending line before the GS command
+            out.write(protocol.build_raster_command(data, width_bytes, height_dots))
+            out.write(b"\n")
+
+        out.write(b"\n" * 6)
+        out.write(protocol.build_cut_command())
+        out.flush()
+    except Exception as exc:  # noqa: BLE001
+        eprint(f"ERROR: rastertometeorsprint: rendering failed: {exc!r}")
+        return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

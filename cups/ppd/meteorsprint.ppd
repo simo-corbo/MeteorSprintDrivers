@@ -1,0 +1,90 @@
+*PPD-Adobe: "4.3"
+*%
+*% PPD for the Meteor Sprint thermal receipt printer.
+*% See docs/protocol.md and docs/usb-analysis.md for how every value
+*% below (paper width, resolution) was confirmed against the physical
+*% hardware.
+*%
+*FormatVersion: "4.3"
+*FileVersion: "1.0"
+*LanguageEncoding: ISOLatin1
+*LanguageVersion: English
+*PCFileName: "METEORSP.PPD"
+*Manufacturer: "Meteor"
+*Product: "(Meteor Sprint)"
+*cupsVersion: 2.0
+*cupsSNMPSupplies: False
+*cupsLanguages: "en"
+*ModelName: "Meteor Sprint"
+*ShortNickName: "Meteor Sprint"
+*NickName: "Meteor Sprint"
+*PSVersion: "(3010.000) 0"
+*LanguageLevel: "3"
+*ColorDevice: False
+*DefaultColorSpace: Gray
+*FileSystem: False
+*Throughput: "1"
+*TTRasterizer: Type42
+*cupsManualCopies: True
+*cupsModelNumber: 1
+
+*% Our filter accepts a PDF directly (CUPS/macOS normalizes whatever the
+*% application submitted into PDF before this point) and rasterizes it
+*% itself using PyMuPDF + the confirmed protocol -- it does not go
+*% through CUPS's own raster filter chain, and its output
+*% (application/vnd.cups-raw) is handed to the backend byte-for-byte.
+*cupsFilter2: "application/pdf application/vnd.cups-raw 0 /Library/Printers/Meteor/rastertometeorsprint-bin/rastertometeorsprint-bin"
+
+*% Paper width is confirmed fixed at 576 dots / ~72mm printable
+*% (see docs/protocol.md). Length is receipt-style/variable, so a
+*% generous default plus a custom-size range is offered. 204pt = 72mm.
+*OpenUI *PageSize/Media Size: PickOne
+*OrderDependency: 10 AnySetup *PageSize
+*DefaultPageSize: w204h1683
+*PageSize w204h1683/Receipt (72mm x 594mm): "<</PageSize[204 1683]/ImagingBBox null>>setpagedevice"
+*PageSize Custom/Custom Size: "pop pop pop <</PageSize[5 -2 roll]/ImagingBBox null>>setpagedevice"
+*CloseUI: *PageSize
+
+*OpenUI *PageRegion/Media Size: PickOne
+*OrderDependency: 10 AnySetup *PageRegion
+*DefaultPageRegion: w204h1683
+*PageRegion w204h1683/Receipt (72mm x 594mm): "<</PageSize[204 1683]/ImagingBBox null>>setpagedevice"
+*PageRegion Custom/Custom Size: "pop pop pop <</PageSize[5 -2 roll]/ImagingBBox null>>setpagedevice"
+*CloseUI: *PageRegion
+
+*DefaultImageableArea: w204h1683
+*ImageableArea w204h1683/Receipt (72mm x 594mm): "0 0 204 1683"
+*ImageableArea Custom/Custom Size: "0 0 204 1683"
+
+*DefaultPaperDimension: w204h1683
+*PaperDimension w204h1683/Receipt (72mm x 594mm): "204 1683"
+*PaperDimension Custom/Custom Size: "204 1683"
+
+*MaxMediaWidth: "204"
+*MaxMediaHeight: "14400"
+*MinMediaWidth: "204"
+*MinMediaHeight: "72"
+*HWMargins: 0 0 0 0
+*CustomPageSize True: "pop pop pop <</PageSize[5 -2 roll]/ImagingBBox null>>setpagedevice"
+*ParamCustomPageSize Width: 1 points 204 204
+*ParamCustomPageSize Height: 2 points 72 14400
+*ParamCustomPageSize WidthOffset: 3 points 0 0
+*ParamCustomPageSize HeightOffset: 4 points 0 0
+*ParamCustomPageSize Orientation: 5 int 0 0
+
+*% Informational only -- our filter always rasterizes at 203 DPI
+*% (docs/protocol.md), matching the confirmed 576-dot printable width.
+*OpenUI *Resolution/Resolution: PickOne
+*OrderDependency: 10 AnySetup *Resolution
+*DefaultResolution: 203dpi
+*Resolution 203dpi/203 DPI: "<</HWResolution[203 203]>>setpagedevice"
+*CloseUI: *Resolution
+
+*OpenUI *ColorModel/Color Mode: PickOne
+*OrderDependency: 10 AnySetup *ColorModel
+*DefaultColorModel: Gray
+*ColorModel Gray/Grayscale (dithered): "<</cupsColorSpace 0/cupsBitsPerColor 1>>setpagedevice"
+*CloseUI: *ColorModel
+
+*DefaultFont: Courier
+*Font Courier: Standard "(001.005)" Standard ROM
